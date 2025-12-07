@@ -11,9 +11,10 @@ function App() {
   const [speechResults, setSpeechResults] = useState({});
   const [isListening, setIsListening] = useState(null); // Lưu id dòng đang nghe
 
+  // Hàm lấy dữ liệu từ Backend
   const fetchHistory = async () => {
     try {
-      const res = await axios.get("http://127.0.0.1:5000/history");
+      const res = await axios.get("https://dictation-backend-skto.onrender.com/history");
       setHistory(res.data);
     } catch (error) {
       console.error("Lỗi kết nối Backend:", error);
@@ -28,7 +29,7 @@ function App() {
   const handleAddWord = async () => {
     if (!newWord.trim()) return;
     try {
-      await axios.post("http://127.0.0.1:5000/check-word", { word: newWord });
+      await axios.post("https://dictation-backend-skto.onrender.com/check-word", { word: newWord });
       setNewWord("");
       fetchHistory();
     } catch (error) {
@@ -36,27 +37,23 @@ function App() {
     }
   };
 
-  // --- XỬ LÝ XÓA TỪ (MỚI) ---
+  // --- XỬ LÝ XÓA TỪ ---
   const handleDelete = async (id) => {
-    {
-      try {
-        await axios.delete(`http://127.0.0.1:5000/delete/${id}`);
-        fetchHistory(); // Load lại bảng sau khi xóa
-      } catch (error) {
-        console.error("Lỗi khi xóa:", error);
-      }
+    try {
+      await axios.delete(`https://dictation-backend-skto.onrender.com/delete/${id}`);
+      fetchHistory(); // Load lại bảng sau khi xóa
+    } catch (error) {
+      console.error("Lỗi khi xóa:", error);
     }
   };
 
   // --- XỬ LÝ NHẬN DIỆN GIỌNG NÓI (Speech to Text) ---
   const handleListen = (id, targetWord) => {
     // Kiểm tra trình duyệt có hỗ trợ không
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
     if (!SpeechRecognition) {
-      alert(
-        "Trình duyệt của bạn không hỗ trợ chức năng này. Hãy dùng Google Chrome.",
-      );
+      alert("Trình duyệt của bạn không hỗ trợ chức năng này. Hãy dùng Google Chrome.");
       return;
     }
 
@@ -99,14 +96,7 @@ function App() {
       <h1>English Dictation Master 🎤</h1>
 
       {/* KHU VỰC THÊM TỪ */}
-      <div
-        style={{
-          marginBottom: "20px",
-          padding: "15px",
-          background: "#f0f8ff",
-          borderRadius: "8px",
-        }}
-      >
+      <div style={{ marginBottom: "20px", padding: "15px", background: "#f0f8ff", borderRadius: "8px" }}>
         <input
           type="text"
           value={newWord}
@@ -117,13 +107,8 @@ function App() {
         <button
           onClick={handleAddWord}
           style={{
-            marginLeft: "10px",
-            padding: "8px 15px",
-            cursor: "pointer",
-            background: "#007bff",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
+            marginLeft: "10px", padding: "8px 15px", cursor: "pointer",
+            background: "#007bff", color: "white", border: "none", borderRadius: "4px",
           }}
         >
           Thêm đề bài
@@ -131,10 +116,7 @@ function App() {
       </div>
 
       {/* BẢNG LUYỆN TẬP */}
-      <table
-        border="1"
-        style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}
-      >
+      <table border="1" style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
         <thead style={{ backgroundColor: "#343a40", color: "white" }}>
           <tr>
             <th style={{ padding: "10px", width: "50px" }}>STT</th>
@@ -148,8 +130,7 @@ function App() {
         <tbody>
           {history.map((item, index) => {
             const userAnswer = userAnswers[item.id] || "";
-            const isCorrectType =
-              userAnswer.trim().toLowerCase() === item.word.toLowerCase();
+            const isCorrectType = userAnswer.trim().toLowerCase() === item.word.toLowerCase();
 
             // Logic chấm điểm nói
             const spokenWord = speechResults[item.id];
@@ -169,13 +150,7 @@ function App() {
             return (
               <tr key={item.id} style={{ borderBottom: "1px solid #ddd" }}>
                 {/* Cột 1: STT */}
-                <td
-                  style={{
-                    padding: "10px",
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
+                <td style={{ padding: "10px", textAlign: "center", fontWeight: "bold" }}>
                   {index + 1}
                 </td>
 
@@ -187,11 +162,8 @@ function App() {
                     onChange={(e) => handleUserType(item.id, e.target.value)}
                     placeholder="Nghe và điền..."
                     style={{
-                      padding: "8px",
-                      width: "150px",
-                      border: isCorrectType
-                        ? "2px solid green"
-                        : "1px solid #ccc",
+                      padding: "8px", width: "150px",
+                      border: isCorrectType ? "2px solid green" : "1px solid #ccc",
                       color: isCorrectType ? "green" : "black",
                     }}
                   />
@@ -200,17 +172,11 @@ function App() {
                 {/* Cột 3: Audio Mẫu */}
                 <td style={{ padding: "10px" }}>
                   {item.audio ? (
-                    <audio
-                      controls
-                      src={item.audio}
-                      style={{ height: "30px", width: "100px" }}
-                    />
-                  ) : (
-                    "-"
-                  )}
+                    <audio controls src={item.audio} style={{ height: "30px", width: "100px" }} />
+                  ) : "-"}
                 </td>
 
-                {/* CỘT 4: LUYỆN NÓI (TÍNH NĂNG MỚI) */}
+                {/* CỘT 4: LUYỆN NÓI */}
                 <td style={{ padding: "10px" }}>
                   <button
                     onClick={() => handleListen(item.id, item.word)}
@@ -218,34 +184,22 @@ function App() {
                       cursor: "pointer",
                       background: isListening === item.id ? "red" : "white",
                       color: isListening === item.id ? "white" : "black",
-                      border: "1px solid #ccc",
-                      borderRadius: "50%",
-                      width: "35px",
-                      height: "35px",
+                      border: "1px solid #ccc", borderRadius: "50%",
+                      width: "35px", height: "35px",
                     }}
                     title="Bấm để nói"
                   >
                     🎤
                   </button>
-                  <span
-                    style={{
-                      marginLeft: "10px",
-                      color: speakColor,
-                      fontWeight: "bold",
-                    }}
-                  >
+                  <span style={{ marginLeft: "10px", color: speakColor, fontWeight: "bold" }}>
                     {isListening === item.id ? "Đang nghe..." : speakStatus}
                   </span>
                 </td>
 
                 {/* Cột 5: Gợi ý */}
-                <td
-                  style={{ padding: "10px", fontSize: "14px", color: "#555" }}
-                >
+                <td style={{ padding: "10px", fontSize: "14px", color: "#555" }}>
                   <div>Type: {item.type}</div>
-                  <div style={{ fontFamily: "Lucida Sans Unicode" }}>
-                    /{item.phonetic}/
-                  </div>
+                  <div style={{ fontFamily: "Lucida Sans Unicode" }}>/{item.phonetic}/</div>
                 </td>
 
                 {/* Cột 6: Nút Xóa */}
@@ -253,10 +207,8 @@ function App() {
                   <button
                     onClick={() => handleDelete(item.id)}
                     style={{
-                      background: "transparent",
-                      border: "none",
-                      padding: "5px 10px",
-                      cursor: "pointer",
+                      background: "transparent", border: "none",
+                      padding: "5px 10px", cursor: "pointer",
                     }}
                   >
                     ❌
