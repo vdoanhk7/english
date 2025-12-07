@@ -6,15 +6,17 @@ function App() {
   const [newWord, setNewWord] = useState("");
   const [history, setHistory] = useState([]);
   const [userAnswers, setUserAnswers] = useState({});
+  const [isProcessing, setIsProcessing] = useState(false); // Biến để hiện trạng thái đang tải
 
-  // State lưu kết quả phát âm: { id_dòng: "từ bạn vừa nói" }
   const [speechResults, setSpeechResults] = useState({});
-  const [isListening, setIsListening] = useState(null); // Lưu id dòng đang nghe
+  const [isListening, setIsListening] = useState(null);
 
-  // Hàm lấy dữ liệu từ Backend
+  // Link API của bạn
+  const API_URL = "https://dictation-backend-skto.onrender.com";
+
   const fetchHistory = async () => {
     try {
-      const res = await axios.get("https://dictation-backend-skto.onrender.com/history");
+      const res = await axios.get(`${API_URL}/history`);
       setHistory(res.data);
     } catch (error) {
       console.error("Lỗi kết nối Backend:", error);
@@ -25,61 +27,66 @@ function App() {
     fetchHistory();
   }, []);
 
-  // --- XỬ LÝ THÊM TỪ ---
+  // --- XỬ LÝ THÊM NHIỀU TỪ CÙNG LÚC ---
   const handleAddWord = async () => {
     if (!newWord.trim()) return;
-    try {
-      await axios.post("https://dictation-backend-skto.onrender.com/check-word", { word: newWord });
-      setNewWord("");
-      fetchHistory();
-    } catch (error) {
-      alert("Không tìm thấy từ này hoặc lỗi server!");
+
+    // 1. Tách chuỗi nhập vào thành mảng các từ (dựa vào dấu phẩy)
+    const wordsToAdd = newWord.split(',').map(w => w.trim()).filter(w => w.length > 0);
+
+    if (wordsToAdd.length === 0) return;
+
+    setIsProcessing(true); // Bật trạng thái đang xử lý
+
+    // 2. Chạy vòng lặp gửi từng từ lên Backend
+    for (const word of wordsToAdd) {
+      try {
+        await axios.post(`${API_URL}/check-word`, { word: word });
+      } catch (error) {
+        console.error(`Lỗi khi thêm từ: ${word}`, error);
+      }
     }
+
+    // 3. Xử lý xong
+    setIsProcessing(false); // Tắt trạng thái
+    setNewWord(""); // Xóa ô nhập
+    fetchHistory(); // Cập nhật lại bảng
   };
 
-  // --- XỬ LÝ XÓA TỪ ---
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`https://dictation-backend-skto.onrender.com/delete/${id}`);
-      fetchHistory(); // Load lại bảng sau khi xóa
+      await axios.delete(`${API_URL}/delete/${id}`);
+      fetchHistory();
     } catch (error) {
       console.error("Lỗi khi xóa:", error);
     }
   };
 
-  // --- XỬ LÝ NHẬN DIỆN GIỌNG NÓI (Speech to Text) ---
   const handleListen = (id, targetWord) => {
-    // Kiểm tra trình duyệt có hỗ trợ không
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
     if (!SpeechRecognition) {
-      alert("Trình duyệt của bạn không hỗ trợ chức năng này. Hãy dùng Google Chrome.");
+      alert("Trình duyệt không hỗ trợ. Hãy dùng Google Chrome.");
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = "en-US"; // Chế độ nghe tiếng Anh
+    recognition.lang = "en-US";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    setIsListening(id); // Bật hiệu ứng đang nghe cho dòng này
-
+    setIsListening(id);
     recognition.start();
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.toLowerCase();
-      // Lưu kết quả nghe được
-      setSpeechResults((prev) => ({
-        ...prev,
-        [id]: transcript,
-      }));
+      setSpeechResults((prev) => ({ ...prev, [id]: transcript }));
       setIsListening(null);
     };
 
     recognition.onerror = (event) => {
       console.error("Speech error", event.error);
       setIsListening(null);
-      alert("Không nghe rõ, vui lòng thử lại!");
+      alert("Không nghe rõ, thử lại!");
     };
 
     recognition.onend = () => {
@@ -91,27 +98,41 @@ function App() {
     setUserAnswers((prev) => ({ ...prev, [id]: value }));
   };
 
+  // Xử lý khi ấn Enter ở ô nhập
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleAddWord();
+    }
+  };
+
   return (
     <div className="App" style={{ padding: "20px", fontFamily: "Arial" }}>
       <h1>English Dictation Master 🎤</h1>
 
       {/* KHU VỰC THÊM TỪ */}
       <div style={{ marginBottom: "20px", padding: "15px", background: "#f0f8ff", borderRadius: "8px" }}>
+        <p style={{margin: '0 0 10px 0', fontSize: '14px', color: '#666'}}>
+          💡 Mẹo: Nhập nhiều từ cách nhau bởi dấu phẩy. Ví dụ: <b>apple, banana, orange</b>
+        </p>
         <input
           type="text"
           value={newWord}
           onChange={(e) => setNewWord(e.target.value)}
-          placeholder="Nhập từ gốc (VD: vocabulary)..."
-          style={{ padding: "8px", width: "300px" }}
+          onKeyDown={handleKeyDown}
+          placeholder="Nhập từ vựng (ngăn cách bằng dấu phẩy)..."
+          style={{ padding: "8px", width: "400px" }}
+          disabled={isProcessing} // Khóa ô nhập khi đang chạy
         />
         <button
           onClick={handleAddWord}
+          disabled={isProcessing} // Khóa nút khi đang chạy
           style={{
-            marginLeft: "10px", padding: "8px 15px", cursor: "pointer",
-            background: "#007bff", color: "white", border: "none", borderRadius: "4px",
+            marginLeft: "10px", padding: "8px 15px", cursor: isProcessing ? "wait" : "pointer",
+            background: isProcessing ? "#ccc" : "#007bff", // Đổi màu khi đang chạy
+            color: "white", border: "none", borderRadius: "4px",
           }}
         >
-          Thêm đề bài
+          {isProcessing ? "Đang thêm..." : "Thêm đề bài"}
         </button>
       </div>
 
@@ -122,7 +143,7 @@ function App() {
             <th style={{ padding: "10px", width: "50px" }}>STT</th>
             <th style={{ padding: "10px" }}>Điền đáp án</th>
             <th style={{ padding: "10px" }}>Nghe mẫu</th>
-            <th style={{ padding: "10px" }}>Luyện nói (Chấm điểm)</th>
+            <th style={{ padding: "10px" }}>Luyện nói</th>
             <th style={{ padding: "10px" }}>Gợi ý</th>
             <th style={{ padding: "10px", textAlign: "center" }}>Xóa</th>
           </tr>
@@ -131,12 +152,10 @@ function App() {
           {history.map((item, index) => {
             const userAnswer = userAnswers[item.id] || "";
             const isCorrectType = userAnswer.trim().toLowerCase() === item.word.toLowerCase();
-
-            // Logic chấm điểm nói
             const spokenWord = speechResults[item.id];
-            let speakColor = "gray";
+            
             let speakStatus = "Chưa nói";
-
+            let speakColor = "gray";
             if (spokenWord) {
               if (spokenWord === item.word.toLowerCase()) {
                 speakStatus = `✅ Chuẩn: "${spokenWord}"`;
@@ -149,12 +168,7 @@ function App() {
 
             return (
               <tr key={item.id} style={{ borderBottom: "1px solid #ddd" }}>
-                {/* Cột 1: STT */}
-                <td style={{ padding: "10px", textAlign: "center", fontWeight: "bold" }}>
-                  {index + 1}
-                </td>
-
-                {/* Cột 2: Ô điền từ */}
+                <td style={{ padding: "10px", textAlign: "center", fontWeight: "bold" }}>{index + 1}</td>
                 <td style={{ padding: "10px" }}>
                   <input
                     type="text"
@@ -165,18 +179,13 @@ function App() {
                       padding: "8px", width: "150px",
                       border: isCorrectType ? "2px solid green" : "1px solid #ccc",
                       color: isCorrectType ? "green" : "black",
+                      backgroundColor: isCorrectType ? "#e8f5e9" : "white"
                     }}
                   />
                 </td>
-
-                {/* Cột 3: Audio Mẫu */}
                 <td style={{ padding: "10px" }}>
-                  {item.audio ? (
-                    <audio controls src={item.audio} style={{ height: "30px", width: "100px" }} />
-                  ) : "-"}
+                  {item.audio ? <audio controls src={item.audio} style={{ height: "30px", width: "100px" }} /> : "-"}
                 </td>
-
-                {/* CỘT 4: LUYỆN NÓI */}
                 <td style={{ padding: "10px" }}>
                   <button
                     onClick={() => handleListen(item.id, item.word)}
@@ -184,10 +193,8 @@ function App() {
                       cursor: "pointer",
                       background: isListening === item.id ? "red" : "white",
                       color: isListening === item.id ? "white" : "black",
-                      border: "1px solid #ccc", borderRadius: "50%",
-                      width: "35px", height: "35px",
+                      border: "1px solid #ccc", borderRadius: "50%", width: "35px", height: "35px",
                     }}
-                    title="Bấm để nói"
                   >
                     🎤
                   </button>
@@ -195,24 +202,12 @@ function App() {
                     {isListening === item.id ? "Đang nghe..." : speakStatus}
                   </span>
                 </td>
-
-                {/* Cột 5: Gợi ý */}
                 <td style={{ padding: "10px", fontSize: "14px", color: "#555" }}>
-                  <div>Type: {item.type}</div>
+                  <div>{item.type}</div>
                   <div style={{ fontFamily: "Lucida Sans Unicode" }}>/{item.phonetic}/</div>
                 </td>
-
-                {/* Cột 6: Nút Xóa */}
                 <td style={{ padding: "10px", textAlign: "center" }}>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    style={{
-                      background: "transparent", border: "none",
-                      padding: "5px 10px", cursor: "pointer",
-                    }}
-                  >
-                    ❌
-                  </button>
+                  <button onClick={() => handleDelete(item.id)} style={{ background: "transparent", border: "none", cursor: "pointer" }}>❌</button>
                 </td>
               </tr>
             );
