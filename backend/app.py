@@ -7,14 +7,19 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# --- CẤU HÌNH DATABASE ---
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'words.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# --- CẤU HÌNH DATABASE (ĐOẠN BẠN VỪA SỬA) ---
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///words.db')
+
+# Fix lỗi 'postgres://' của Render
+if database_url and database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Tắt cảnh báo
 
 db = SQLAlchemy(app)
 
-# --- MODEL ---
+# --- MODEL (GIỮ NGUYÊN) ---
 class WordHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word = db.Column(db.String(100), nullable=False)
@@ -23,10 +28,11 @@ class WordHistory(db.Model):
     audio_url = db.Column(db.String(200))
     is_correct = db.Column(db.Boolean, default=False)
 
+# Tạo bảng (Quan trọng: Lệnh này sẽ tạo bảng trên PostgreSQL khi chạy trên Render)
 with app.app_context():
     db.create_all()
 
-# --- LOGIC TỪ ĐIỂN ---
+# --- LOGIC CŨ (GIỮ NGUYÊN) ---
 def get_word_info(word):
     url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
     try:
@@ -34,28 +40,21 @@ def get_word_info(word):
         if response.status_code == 200:
             data = response.json()[0]
             phonetic = data.get('phonetic', '') or data.get('phonetics', [{}])[0].get('text', 'N/A')
-            
             audio_url = ""
             for item in data.get('phonetics', []):
                 if item.get('audio'):
                     audio_url = item.get('audio')
                     break
-            
             part_of_speech = data.get('meanings', [{}])[0].get('partOfSpeech', 'N/A')
-
             return {
-                "word": word,
-                "found": True,
-                "phonetic": phonetic,
-                "type": part_of_speech,
-                "audio": audio_url
+                "word": word, "found": True, "phonetic": phonetic,
+                "type": part_of_speech, "audio": audio_url
             }
         return {"word": word, "found": False}
     except:
         return {"word": word, "found": False}
 
-# --- API ROUTES ---
-
+# --- API ROUTES (GIỮ NGUYÊN) ---
 @app.route('/check-word', methods=['POST'])
 def check_word():
     data = request.json
@@ -65,7 +64,6 @@ def check_word():
     
     result = get_word_info(word_input)
     
-    # Chỉ lưu nếu tìm thấy từ
     if result['found']:
         new_entry = WordHistory(
             word=word_input,
@@ -78,7 +76,7 @@ def check_word():
         db.session.commit()
         return jsonify(result)
     else:
-        return jsonify({"error": "Không tìm thấy từ này trong từ điển"}), 404
+        return jsonify({"error": "Không tìm thấy từ này"}), 404
 
 @app.route('/history', methods=['GET'])
 def get_history():
@@ -86,16 +84,11 @@ def get_history():
     results = []
     for item in history_list:
         results.append({
-            "id": item.id,
-            "word": item.word,
-            "type": item.type,
-            "phonetic": item.phonetic,
-            "audio": item.audio_url,
-            "found": item.is_correct
+            "id": item.id, "word": item.word, "type": item.type,
+            "phonetic": item.phonetic, "audio": item.audio_url, "found": item.is_correct
         })
     return jsonify(results)
 
-# --- API MỚI: XÓA TỪ ---
 @app.route('/delete/<int:id>', methods=['DELETE'])
 def delete_word(id):
     word_to_delete = WordHistory.query.get_or_404(id)
