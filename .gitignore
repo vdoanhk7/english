@@ -1,0 +1,15 @@
+# Bỏ qua thư viện nặng của React
+node_modules/
+build/
+.env
+
+# Bỏ qua file rác của Python
+__pycache__/
+*.pyc
+venv/
+.idea/
+.vscode/
+
+# Tùy chọn: Có muốn up file database lên không?
+# Nếu muốn giữ lại danh sách từ đã học thì ĐỪNG thêm dòng dưới
+# words.db
