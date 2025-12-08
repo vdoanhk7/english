@@ -9,7 +9,7 @@ function App() {
   const [userAnswers, setUserAnswers] = useState({});
   const [isProcessing, setIsProcessing] = useState(false);
   const [speechResults, setSpeechResults] = useState({});
-  const [listeningId, setListeningId] = useState(null); // ID của từ đang được nghe
+  const [listeningId, setListeningId] = useState(null);
 
   // --- CẤU HÌNH API ---
   const API_URL = "https://dictation-backend-skto.onrender.com";
@@ -28,11 +28,9 @@ function App() {
     fetchHistory();
   }, []);
 
-  // --- HÀM THÊM TỪ (Xử lý song song cho nhanh) ---
+  // --- HÀM THÊM TỪ ---
   const handleAddWord = async () => {
     if (!newWord.trim()) return;
-
-    // Tách từ bằng dấu phẩy và xóa khoảng trắng thừa
     const wordsToAdd = newWord
       .split(",")
       .map((w) => w.trim())
@@ -40,38 +38,31 @@ function App() {
     if (wordsToAdd.length === 0) return;
 
     setIsProcessing(true);
-
-    // Dùng Promise.all để gửi nhiều từ cùng lúc thay vì đợi từng từ
     const requests = wordsToAdd.map((word) =>
       axios
         .post(`${API_URL}/check-word`, { word: word })
         .catch((err) => console.error(`Lỗi thêm từ ${word}:`, err)),
     );
-
     await Promise.all(requests);
-
     setIsProcessing(false);
     setNewWord("");
-    fetchHistory(); // Load lại danh sách sau khi thêm xong
+    fetchHistory();
   };
 
-  // --- HÀM XÓA TỪ (Đã bỏ popup xác nhận) ---
+  // --- HÀM XÓA TỪ ---
   const handleDelete = async (id) => {
     try {
       await axios.delete(`${API_URL}/delete/${id}`);
-      // Cập nhật giao diện ngay lập tức
       setHistory((prev) => prev.filter((item) => item.id !== id));
     } catch (error) {
       console.error("Lỗi xóa:", error);
-      fetchHistory(); // Nếu lỗi thì load lại
+      fetchHistory();
     }
   };
 
-  // --- HÀM ĐẢO TỪ NGẪU NHIÊN (MỚI THÊM VÀO ĐÂY) ---
+  // --- HÀM ĐẢO TỪ ---
   const handleShuffle = () => {
-    // Tạo bản sao của mảng history
     const shuffled = [...history];
-    // Thuật toán Fisher-Yates Shuffle
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -79,15 +70,13 @@ function App() {
     setHistory(shuffled);
   };
 
-  // --- HÀM XỬ LÝ GIỌNG NÓI (Speech Recognition) ---
+  // --- HÀM XỬ LÝ GIỌNG NÓI ---
   const handleListen = (id) => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert(
-        "Trình duyệt này không hỗ trợ Speech Recognition. Hãy dùng Google Chrome!",
-      );
+      alert("Trình duyệt không hỗ trợ. Hãy dùng Google Chrome!");
       return;
     }
 
@@ -96,33 +85,23 @@ function App() {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    setListeningId(id); // Đánh dấu đang nghe từ nào
+    setListeningId(id);
     recognition.start();
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.toLowerCase();
-      // Loại bỏ dấu chấm câu nếu có
       const cleanTranscript = transcript.replace(
         /[.,\/#!$%\^&\*;:{}=\-_`~()]/g,
         "",
       );
-
-      setSpeechResults((prev) => ({
-        ...prev,
-        [id]: cleanTranscript,
-      }));
+      setSpeechResults((prev) => ({ ...prev, [id]: cleanTranscript }));
       setListeningId(null);
     };
 
-    recognition.onerror = (event) => {
-      // console.error("Speech Error:", event.error); // Tắt log lỗi cho đỡ rác console
-      setListeningId(null);
-    };
-
+    recognition.onerror = () => setListeningId(null);
     recognition.onend = () => setListeningId(null);
   };
 
-  // --- HÀM XỬ LÝ KHI NGƯỜI DÙNG NHẬP TEXT ---
   const handleUserType = (id, value) => {
     setUserAnswers((prev) => ({ ...prev, [id]: value }));
   };
@@ -132,7 +111,7 @@ function App() {
     <div
       className="App"
       style={{
-        padding: "30px",
+        padding: "20px",
         fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
         maxWidth: "1000px",
         margin: "0 auto",
@@ -140,16 +119,66 @@ function App() {
         minHeight: "100vh",
       }}
     >
+      {/* --- PHẦN HEADER MỚI (MADE BY & CONTACT) --- */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "15px",
+          color: "#7f8c8d",
+          fontSize: "13px",
+          fontWeight: "600",
+        }}
+      >
+        <div>
+          🛠️ Made by <span style={{ color: "#2c3e50" }}>Vandoanh for Nmai</span>
+        </div>
+        <div>
+          📧 Contact:{" "}
+          <a
+            href="mailto:vandoanhk7@gmail.com" // Thay email của bạn vào đây
+            style={{ color: "#3498db", textDecoration: "none" }}
+          >
+            Ấn zô để liên hệ
+          </a>
+        </div>
+      </div>
+
       <h1
-        style={{ textAlign: "center", color: "#2c3e50", marginBottom: "30px" }}
+        style={{ textAlign: "center", color: "#2c3e50", marginBottom: "20px" }}
       >
         English Dictation Master 🎤
       </h1>
 
+      {/* --- PHẦN CẢNH BÁO XOAY NGANG (MỚI) --- */}
+      <div
+        style={{
+          backgroundColor: "#fff3cd", // Màu vàng nhạt cảnh báo
+          color: "#856404", // Chữ màu vàng đậm
+          padding: "10px",
+          borderRadius: "8px",
+          marginBottom: "20px",
+          textAlign: "center",
+          fontSize: "14px",
+          border: "1px solid #ffeeba",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+        }}
+      >
+        <span>📱</span>
+        <span>
+          <b>Lưu ý:</b> Nếu dùng điện thoại, hãy <b>xoay ngang màn hình</b> để
+          có trải nghiệm tốt nhất!
+        </span>
+      </div>
+
       {/* KHU VỰC NHẬP TỪ */}
       <div
         style={{
-          marginBottom: "20px", // Giảm margin một chút để nhường chỗ cho nút Đảo từ
+          marginBottom: "20px",
           padding: "25px",
           background: "white",
           borderRadius: "15px",
@@ -189,7 +218,6 @@ function App() {
               borderRadius: "8px",
               outline: "none",
               fontSize: "16px",
-              transition: "border-color 0.2s",
             }}
             disabled={isProcessing}
           />
@@ -205,7 +233,6 @@ function App() {
               borderRadius: "8px",
               fontWeight: "600",
               fontSize: "16px",
-              transition: "transform 0.1s",
             }}
           >
             {isProcessing ? "Đang xử lý..." : "Thêm & Dịch"}
@@ -213,7 +240,7 @@ function App() {
         </div>
       </div>
 
-      {/* --- NÚT ĐẢO TỪ (MỚI THÊM VÀO ĐÂY) --- */}
+      {/* NÚT ĐẢO TỪ */}
       <div
         style={{
           display: "flex",
@@ -225,7 +252,7 @@ function App() {
           onClick={handleShuffle}
           style={{
             padding: "8px 15px",
-            background: "#9b59b6", // Màu tím
+            background: "#9b59b6",
             color: "white",
             border: "none",
             borderRadius: "6px",
@@ -290,8 +317,6 @@ function App() {
                   >
                     {index + 1}
                   </td>
-
-                  {/* Ô ĐIỀN TỪ */}
                   <td style={{ padding: "10px" }}>
                     <input
                       type="text"
@@ -314,8 +339,6 @@ function App() {
                       }}
                     />
                   </td>
-
-                  {/* Ô NGHĨA */}
                   <td
                     style={{
                       padding: "10px",
@@ -326,8 +349,6 @@ function App() {
                   >
                     {(item.meaning || "").toLowerCase()}
                   </td>
-
-                  {/* Ô AUDIO */}
                   <td style={{ textAlign: "center" }}>
                     {item.audio ? (
                       <audio
@@ -341,8 +362,6 @@ function App() {
                       </span>
                     )}
                   </td>
-
-                  {/* Ô LUYỆN NÓI */}
                   <td style={{ textAlign: "center", verticalAlign: "middle" }}>
                     <div
                       style={{
@@ -367,13 +386,10 @@ function App() {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          transition: "all 0.2s",
                         }}
-                        title="Bấm để nói"
                       >
                         {isSpeaking ? "👂" : "🎤"}
                       </button>
-
                       {spokenResult && (
                         <span
                           style={{
@@ -393,8 +409,6 @@ function App() {
                       )}
                     </div>
                   </td>
-
-                  {/* THÔNG TIN TỪ */}
                   <td style={{ padding: "10px" }}>
                     <div
                       style={{
@@ -415,8 +429,6 @@ function App() {
                       /{item.phonetic}/
                     </div>
                   </td>
-
-                  {/* NÚT XÓA */}
                   <td style={{ textAlign: "center" }}>
                     <button
                       onClick={() => handleDelete(item.id)}
@@ -426,7 +438,6 @@ function App() {
                         cursor: "pointer",
                         color: "#fab1a0",
                         fontSize: "20px",
-                        transition: "color 0.2s",
                       }}
                       onMouseOver={(e) => (e.target.style.color = "#d63031")}
                       onMouseOut={(e) => (e.target.style.color = "#fab1a0")}
@@ -439,7 +450,6 @@ function App() {
             })}
           </tbody>
         </table>
-
         {history.length === 0 && (
           <div
             style={{ padding: "40px", textAlign: "center", color: "#bdc3c7" }}
