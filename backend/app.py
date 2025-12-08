@@ -103,16 +103,28 @@ def get_word_details(word):
 def home():
     return "Backend is running!", 200
 
+# --- CẤU HÌNH MẬT KHẨU ADMIN ---
+# Bạn hãy đổi 'vandoanh123' thành mật khẩu khó đoán hơn nhé
+ADMIN_PASSWORD = "280707" 
+
 @app.route('/check-word', methods=['POST'])
 def check_word():
     data = request.json
+    
+    # --- ĐOẠN MỚI: KIỂM TRA QUYỀN ---
+    user_secret = data.get('secret', '')
+    if user_secret != ADMIN_PASSWORD:
+        return jsonify({"error": "Bạn không có quyền thêm từ mới!"}), 403
+    # --------------------------------
+    
     word_input = data.get('word', '').strip()
-
+    
     if not word_input:
         return jsonify({"error": "Chưa nhập từ"}), 400
 
-    # Gọi hàm xử lý logic ở trên
+    # ... (Phần code logic bên dưới giữ nguyên không đổi)
     info = get_word_details(word_input)
+    # ...
 
     # Lưu vào Database
     try:

@@ -3,7 +3,6 @@ import axios from "axios";
 import "./App.css";
 
 function App() {
-  // --- STATE QUẢN LÝ DỮ LIỆU ---
   const [newWord, setNewWord] = useState("");
   const [history, setHistory] = useState([]);
   const [userAnswers, setUserAnswers] = useState({});
@@ -11,10 +10,15 @@ function App() {
   const [speechResults, setSpeechResults] = useState({});
   const [listeningId, setListeningId] = useState(null);
 
-  // --- CẤU HÌNH API ---
+  // --- STATE QUẢN LÝ QUYỀN ADMIN ---
+  // Lấy mật khẩu từ bộ nhớ trình duyệt (nếu đã từng nhập)
+  const [adminKey, setAdminKey] = useState(
+    localStorage.getItem("adminKey") || "",
+  );
+  const [showAdminInput, setShowAdminInput] = useState(false); // Để hiện ô nhập pass
+
   const API_URL = "https://dictation-backend-skto.onrender.com";
 
-  // --- HÀM LOAD DỮ LIỆU ---
   const fetchHistory = async () => {
     try {
       const res = await axios.get(`${API_URL}/history`);
@@ -28,9 +32,34 @@ function App() {
     fetchHistory();
   }, []);
 
-  // --- HÀM THÊM TỪ ---
+  // --- HÀM KÍCH HOẠT CHẾ ĐỘ ADMIN ---
+  const handleEnableAdmin = () => {
+    const pass = prompt("Nhập mật khẩu Admin để mở khóa tính năng thêm từ:");
+    if (pass) {
+      setAdminKey(pass);
+      localStorage.setItem("adminKey", pass); // Lưu vào máy để lần sau không phải nhập lại
+      alert("Đã lưu mật khẩu! Hãy thử thêm từ.");
+    }
+  };
+
+  // --- HÀM XÓA QUYỀN (LOGOUT) ---
+  const handleLogout = () => {
+    localStorage.removeItem("adminKey");
+    setAdminKey("");
+    alert("Đã khóa chế độ Admin.");
+  };
+
   const handleAddWord = async () => {
     if (!newWord.trim()) return;
+
+    // Kiểm tra nhanh ở frontend (chỉ để báo lỗi cho user biết)
+    if (!adminKey) {
+      alert(
+        "Bạn chưa nhập mật khẩu Admin! Bấm vào 'Made by Vandoanh' để đăng nhập.",
+      );
+      return;
+    }
+
     const wordsToAdd = newWord
       .split(",")
       .map((w) => w.trim())
@@ -38,10 +67,19 @@ function App() {
     if (wordsToAdd.length === 0) return;
 
     setIsProcessing(true);
+
     const requests = wordsToAdd.map((word) =>
       axios
-        .post(`${API_URL}/check-word`, { word: word })
-        .catch((err) => console.error(`Lỗi thêm từ ${word}:`, err)),
+        .post(`${API_URL}/check-word`, {
+          word: word,
+          secret: adminKey, // Gửi kèm mật khẩu lên server
+        })
+        .catch((err) => {
+          console.error(`Lỗi:`, err);
+          if (err.response && err.response.status === 403) {
+            alert("Mật khẩu sai! Bạn không có quyền thêm từ.");
+          }
+        }),
     );
     await Promise.all(requests);
     setIsProcessing(false);
@@ -49,8 +87,9 @@ function App() {
     fetchHistory();
   };
 
-  // --- HÀM XÓA TỪ ---
   const handleDelete = async (id) => {
+    // Chỉ cho phép xóa nếu có adminKey (tùy chọn, ở đây tôi cho xóa thoải mái hoặc chặn cũng được)
+    // Nếu muốn chặn xóa luôn thì thêm logic check adminKey ở backend api delete
     try {
       await axios.delete(`${API_URL}/delete/${id}`);
       setHistory((prev) => prev.filter((item) => item.id !== id));
@@ -60,7 +99,6 @@ function App() {
     }
   };
 
-  // --- HÀM ĐẢO TỪ ---
   const handleShuffle = () => {
     const shuffled = [...history];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -70,24 +108,19 @@ function App() {
     setHistory(shuffled);
   };
 
-  // --- HÀM XỬ LÝ GIỌNG NÓI ---
   const handleListen = (id) => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
-
     if (!SpeechRecognition) {
       alert("Trình duyệt không hỗ trợ. Hãy dùng Google Chrome!");
       return;
     }
-
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
-
     setListeningId(id);
     recognition.start();
-
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.toLowerCase();
       const cleanTranscript = transcript.replace(
@@ -97,7 +130,6 @@ function App() {
       setSpeechResults((prev) => ({ ...prev, [id]: cleanTranscript }));
       setListeningId(null);
     };
-
     recognition.onerror = () => setListeningId(null);
     recognition.onend = () => setListeningId(null);
   };
@@ -106,7 +138,6 @@ function App() {
     setUserAnswers((prev) => ({ ...prev, [id]: value }));
   };
 
-  // --- GIAO DIỆN (JSX) ---
   return (
     <div
       className="App"
@@ -119,7 +150,7 @@ function App() {
         minHeight: "100vh",
       }}
     >
-      {/* --- PHẦN HEADER MỚI (MADE BY & CONTACT) --- */}
+      {/* HEADER & LOGIN ẨN */}
       <div
         style={{
           display: "flex",
@@ -132,15 +163,34 @@ function App() {
         }}
       >
         <div>
-          🛠️ Made by <span style={{ color: "#2c3e50" }}>Vandoanh for Nmai</span>
+          🛠️ Made by{" "}
+          <span
+            style={{
+              color: "#2c3e50",
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+            onClick={handleEnableAdmin} // <--- BẤM VÀO ĐÂY ĐỂ NHẬP PASS
+            title="Bấm vào đây để nhập mật khẩu Admin"
+          >
+            Vandoanh
+          </span>
+          {adminKey && (
+            <span
+              onClick={handleLogout}
+              style={{ marginLeft: "10px", color: "red", cursor: "pointer" }}
+            >
+              (Logout)
+            </span>
+          )}
         </div>
         <div>
           📧 Contact:{" "}
           <a
-            href="mailto:vandoanhk7@gmail.com" // Thay email của bạn vào đây
+            href="mailto:vandoanh@example.com"
             style={{ color: "#3498db", textDecoration: "none" }}
           >
-            Ấn zô để liên hệ
+            Liên hệ tôi
           </a>
         </div>
       </div>
@@ -151,11 +201,10 @@ function App() {
         English Dictation Master 🎤
       </h1>
 
-      {/* --- PHẦN CẢNH BÁO XOAY NGANG (MỚI) --- */}
       <div
         style={{
-          backgroundColor: "#fff3cd", // Màu vàng nhạt cảnh báo
-          color: "#856404", // Chữ màu vàng đậm
+          backgroundColor: "#fff3cd",
+          color: "#856404",
           padding: "10px",
           borderRadius: "8px",
           marginBottom: "20px",
@@ -170,12 +219,13 @@ function App() {
       >
         <span>📱</span>
         <span>
-          <b>Lưu ý:</b> Nếu dùng điện thoại, hãy <b>xoay ngang màn hình</b> để
-          có trải nghiệm tốt nhất!
+          <b>Chú ý:</b> Web này dùng trên máy tính là tốt nhất, nếu dùng điện
+          thoại bạn nhớ xoay ngang nhé!
         </span>
       </div>
 
-      {/* KHU VỰC NHẬP TỪ */}
+      {/* KHU VỰC NHẬP TỪ (CHỈ HIỆN NẾU ĐÃ NHẬP ĐÚNG PASS HOẶC HIỆN NHƯNG KHÓA) */}
+      {/* Ở đây tôi chọn cách: Vẫn hiện nhưng nếu bấm nút sẽ đòi pass */}
       <div
         style={{
           marginBottom: "20px",
@@ -185,62 +235,73 @@ function App() {
           boxShadow: "0 4px 6px rgba(0,0,0,0.05)",
         }}
       >
-        <p
-          style={{
-            margin: "0 0 15px 0",
-            fontSize: "15px",
-            color: "#666",
-            textAlign: "center",
-          }}
-        >
-          💡 Nhập từ tiếng Anh (ví dụ: <b>apple, love, programming</b>). Hệ
-          thống sẽ tự dịch!
-        </p>
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <input
-            type="text"
-            value={newWord}
-            onChange={(e) => setNewWord(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAddWord()}
-            placeholder="Nhập từ tiếng Anh..."
-            style={{
-              padding: "12px 20px",
-              width: "100%",
-              maxWidth: "400px",
-              border: "2px solid #e9ecef",
-              borderRadius: "8px",
-              outline: "none",
-              fontSize: "16px",
-            }}
-            disabled={isProcessing}
-          />
-          <button
-            onClick={handleAddWord}
-            disabled={isProcessing}
-            style={{
-              padding: "12px 30px",
-              cursor: isProcessing ? "wait" : "pointer",
-              background: isProcessing ? "#95a5a6" : "#3498db",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: "600",
-              fontSize: "16px",
-            }}
-          >
-            {isProcessing ? "Đang xử lý..." : "Thêm & Dịch"}
-          </button>
-        </div>
+        {/* Nếu chưa có key thì hiện thông báo */}
+        {!adminKey ? (
+          <div style={{ textAlign: "center", color: "#e74c3c" }}>
+            🔒 Chức năng thêm từ đang khóa. Chỉ Admin mới được thêm. <br />
+            <small style={{ color: "#999" }}>
+              (Bấm vào tên tác giả ở góc trái trên cùng để mở khóa)
+            </small>
+          </div>
+        ) : (
+          <>
+            <p
+              style={{
+                margin: "0 0 15px 0",
+                fontSize: "15px",
+                color: "#666",
+                textAlign: "center",
+              }}
+            >
+              💡 Nhập từ tiếng Anh (ví dụ: <b>apple, love, programming</b>). Hệ
+              thống sẽ tự dịch!
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                justifyContent: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <input
+                type="text"
+                value={newWord}
+                onChange={(e) => setNewWord(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddWord()}
+                placeholder="Nhập từ tiếng Anh..."
+                style={{
+                  padding: "12px 20px",
+                  width: "100%",
+                  maxWidth: "400px",
+                  border: "2px solid #e9ecef",
+                  borderRadius: "8px",
+                  outline: "none",
+                  fontSize: "16px",
+                }}
+                disabled={isProcessing}
+              />
+              <button
+                onClick={handleAddWord}
+                disabled={isProcessing}
+                style={{
+                  padding: "12px 30px",
+                  cursor: isProcessing ? "wait" : "pointer",
+                  background: isProcessing ? "#95a5a6" : "#3498db",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: "600",
+                  fontSize: "16px",
+                }}
+              >
+                {isProcessing ? "Đang xử lý..." : "Thêm & Dịch"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* NÚT ĐẢO TỪ */}
       <div
         style={{
           display: "flex",
@@ -268,7 +329,6 @@ function App() {
         </button>
       </div>
 
-      {/* BẢNG TỪ VỰNG */}
       <div
         style={{
           overflowX: "auto",
@@ -302,7 +362,6 @@ function App() {
                 userAnswer.trim().toLowerCase() === item.word.toLowerCase();
               const spokenResult = speechResults[item.id];
               const isSpeaking = listeningId === item.id;
-
               return (
                 <tr
                   key={item.id}
