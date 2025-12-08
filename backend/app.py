@@ -161,8 +161,19 @@ def get_history():
         })
     return jsonify(results)
 
+# --- TÌM ĐOẠN NÀY TRONG FILE app.py VÀ THAY THẾ ---
+
 @app.route('/delete/<int:id>', methods=['DELETE'])
 def delete_word(id):
+    # Lấy dữ liệu gửi kèm (với method DELETE, cần dùng get_json(silent=True))
+    data = request.get_json(silent=True) or {}
+    user_secret = data.get('secret', '')
+
+    # --- KIỂM TRA MẬT KHẨU ADMIN ---
+    if user_secret != ADMIN_PASSWORD:
+        return jsonify({"error": "Bạn không có quyền xóa!"}), 403
+    # -------------------------------
+
     word = WordHistory.query.get_or_404(id)
     try:
         db.session.delete(word)

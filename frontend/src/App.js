@@ -55,7 +55,7 @@ function App() {
     // Kiểm tra nhanh ở frontend (chỉ để báo lỗi cho user biết)
     if (!adminKey) {
       alert(
-        "Bạn chưa nhập mật khẩu Admin! Bấm vào 'Made by Vandoanh' để đăng nhập.",
+        "Bạn chưa nhập mật khẩu Admin! Bấm vào 'Made by Vandoanh ' để đăng nhập.",
       );
       return;
     }
@@ -87,15 +87,31 @@ function App() {
     fetchHistory();
   };
 
+  // --- TÌM HÀM handleDelete VÀ THAY THẾ BẰNG HÀM NÀY ---
   const handleDelete = async (id) => {
-    // Chỉ cho phép xóa nếu có adminKey (tùy chọn, ở đây tôi cho xóa thoải mái hoặc chặn cũng được)
-    // Nếu muốn chặn xóa luôn thì thêm logic check adminKey ở backend api delete
+    // 1. Kiểm tra quyền ngay tại Frontend
+    if (!adminKey) {
+      alert(
+        "🔒 Chức năng xóa đang khóa!\nHãy bấm vào tên tác giả để đăng nhập Admin.",
+      );
+      return;
+    }
+
     try {
-      await axios.delete(`${API_URL}/delete/${id}`);
+      // 2. Gửi request DELETE kèm mật khẩu
+      // Lưu ý: axios.delete cú pháp gửi data hơi khác axios.post
+      await axios.delete(`${API_URL}/delete/${id}`, {
+        data: { secret: adminKey }, // Gửi mật khẩu trong body
+      });
+
+      // 3. Cập nhật giao diện
       setHistory((prev) => prev.filter((item) => item.id !== id));
     } catch (error) {
       console.error("Lỗi xóa:", error);
-      fetchHistory();
+      // Nếu server trả về lỗi 403 (Không có quyền)
+      if (error.response && error.response.status === 403) {
+        alert("⛔ Mật khẩu Admin không đúng hoặc đã hết hạn!");
+      }
     }
   };
 
