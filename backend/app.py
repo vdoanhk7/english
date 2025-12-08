@@ -3,8 +3,7 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import requests
 import os
-from googletrans import Translator # <--- MỚI: Import thư viện dịch
-
+from deep_translator import GoogleTranslator
 app = Flask(__name__)
 CORS(app)
 
@@ -17,7 +16,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-translator = Translator() # <--- MỚI: Khởi tạo máy dịch
+
 
 # --- MODEL (Cần cột meaning) ---
 class WordHistory(db.Model):
@@ -62,11 +61,12 @@ def get_word_info(word):
                     break
             result['audio'] = audio_url
 
-            # --- PHẦN MỚI: GỌI GOOGLE TRANSLATE ---
+            # --- PHẦN MỚI: DÙNG DEEP TRANSLATOR ---
             try:
-                # Dịch từ 'word' sang tiếng Việt (dest='vi')
-                translation = translator.translate(word, dest='vi')
-                result['meaning'] = translation.text
+                # Dịch từ 'word' sang tiếng Việt (target='vi')
+                # source='auto' để nó tự nhận diện tiếng Anh
+                translation = GoogleTranslator(source='auto', target='vi').translate(word)
+                result['meaning'] = translation
             except Exception as e:
                 print(f"Lỗi dịch thuật: {e}")
                 result['meaning'] = "Không dịch được"
