@@ -72,102 +72,153 @@ function App() {
     setUserAnswers(prev => ({ ...prev, [id]: value }));
   };
 
-  return (
-    <div className="App" style={{ padding: "20px", fontFamily: "Arial" }}>
-      <h1>English Dictation Master 🎤</h1>
+  // ... (Các phần import và logic phía trên giữ nguyên)
 
-      {/* KHU VỰC THÊM TỪ (Đơn giản hóa) */}
-      <div style={{ marginBottom: "20px", padding: "15px", background: "#f0f8ff", borderRadius: "8px" }}>
-        <p style={{margin: '0 0 10px 0', fontSize: '14px', color: '#666'}}>
-          💡 Nhập từ tiếng Anh (ví dụ: <b>apple, love, programming</b>). Hệ thống sẽ tự dịch!
+  return (
+    <div className="App" style={{ padding: "30px", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", maxWidth: "1000px", margin: "0 auto" }}>
+      <h1 style={{textAlign: "center", color: "#2c3e50"}}>English Dictation Master 🎤</h1>
+
+      {/* INPUT AREA */}
+      <div style={{ marginBottom: "30px", padding: "20px", background: "#f8f9fa", borderRadius: "12px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
+        <p style={{margin: '0 0 10px 0', fontSize: '15px', color: '#666', textAlign: "center"}}>
+           💡 Nhập từ tiếng Anh (ví dụ: <b>apple, love, programming</b>). Hệ thống sẽ tự dịch!
         </p>
-        <div style={{display: 'flex', gap: '10px'}}>
+        <div style={{display: 'flex', gap: '10px', justifyContent: "center"}}>
             <input
             type="text"
             value={newWord}
             onChange={(e) => setNewWord(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddWord()}
             placeholder="Nhập từ tiếng Anh..."
-            style={{ padding: "10px", width: "300px", flex: 1 }}
+            style={{ 
+                padding: "12px", 
+                width: "100%", // Fix lỗi tràn khung
+                maxWidth: "400px", // Giới hạn chiều rộng tối đa
+                border: "1px solid #ced4da", 
+                borderRadius: "6px",
+                outline: "none",
+                fontSize: "16px"
+            }}
             disabled={isProcessing}
             />
             <button
             onClick={handleAddWord}
             disabled={isProcessing}
             style={{
-                padding: "10px 20px", cursor: isProcessing ? "wait" : "pointer",
-                background: isProcessing ? "#999" : "#007bff", 
-                color: "white", border: "none", borderRadius: "4px",
-                fontWeight: "bold"
+                padding: "12px 25px", cursor: isProcessing ? "wait" : "pointer",
+                background: isProcessing ? "#95a5a6" : "#007bff", 
+                color: "white", border: "none", borderRadius: "6px",
+                fontWeight: "600", fontSize: "16px",
+                transition: "background 0.3s"
             }}
             >
-            {isProcessing ? "Đang xử lý..." : "Thêm & Dịch"}
+            {isProcessing ? "Adding..." : "Thêm & Dịch"}
             </button>
         </div>
       </div>
 
-      {/* BẢNG LUYỆN TẬP */}
-      <table border="1" style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-        <thead style={{ backgroundColor: "#2c3e50", color: "white" }}>
-          <tr>
-            <th style={{ padding: "10px" }}>STT</th>
-            <th style={{ padding: "10px" }}>Điền từ</th>
-            <th style={{ padding: "10px" }}>Nghĩa (Tự động)</th> {/* Cột này tự hiện */}
-            <th style={{ padding: "10px" }}>Audio</th>
-            <th style={{ padding: "10px" }}>Nói</th>
-            <th style={{ padding: "10px" }}>Gợi ý</th>
-            <th style={{ padding: "10px" }}>Xóa</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.map((item, index) => {
-            const userAnswer = userAnswers[item.id] || "";
-            const isCorrect = userAnswer.trim().toLowerCase() === item.word.toLowerCase();
-            const spoken = speechResults[item.id];
-            
-            return (
-              <tr key={item.id} style={{ borderBottom: "1px solid #ddd" }}>
-                <td style={{ padding: "10px", textAlign: "center" }}>{index + 1}</td>
-                <td style={{ padding: "10px" }}>
-                  <input
-                    type="text"
-                    value={userAnswer}
-                    onChange={(e) => handleUserType(item.id, e.target.value)}
-                    placeholder="Nghe và điền..."
-                    style={{
-                      padding: "8px", width: "100%",
-                      border: isCorrect ? "2px solid green" : "1px solid #ccc",
-                      color: isCorrect ? "green" : "black",
-                      backgroundColor: isCorrect ? "#e8f5e9" : "white"
-                    }}
-                  />
-                </td>
-                
-                {/* HIỂN THỊ NGHĨA */}
-                <td style={{ padding: "10px", fontWeight: "bold", color: "#d32f2f" }}>
-                    {item.meaning || "Đang cập nhật..."}
-                </td>
+      {/* TABLE */}
+      <div style={{overflowX: "auto", borderRadius: "8px", boxShadow: "0 0 10px rgba(0,0,0,0.05)"}}>
+        <table style={{ width: "100%", borderCollapse: "collapse", background: "white" }}>
+          <thead style={{ backgroundColor: "#34495e", color: "white" }}>
+            <tr>
+              <th style={{ padding: "15px", textAlign: "center", width: "50px" }}>#</th>
+              <th style={{ padding: "15px", textAlign: "left" }}>Điền từ</th>
+              <th style={{ padding: "15px", textAlign: "left" }}>Nghĩa</th> 
+              <th style={{ padding: "15px", textAlign: "center" }}>Audio</th>
+              <th style={{ padding: "15px", textAlign: "center" }}>Luyện nói</th>
+              <th style={{ padding: "15px", textAlign: "left" }}>Gợi ý</th>
+              <th style={{ padding: "15px", textAlign: "center" }}>Xóa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.map((item, index) => {
+              const userAnswer = userAnswers[item.id] || "";
+              // Logic check: Đúng thì true
+              const isCorrect = userAnswer.trim().toLowerCase() === item.word.toLowerCase();
+              const spoken = speechResults[item.id];
+              
+              return (
+                <tr key={item.id} style={{ borderBottom: "1px solid #eee", height: "60px" }}>
+                  <td style={{ textAlign: "center", color: "#7f8c8d" }}>{index + 1}</td>
+                  
+                  {/* CỘT ĐIỀN TỪ (FIX LỖI 1) */}
+                  <td style={{ padding: "10px" }}>
+                    <input
+                      type="text"
+                      value={userAnswer}
+                      onChange={(e) => handleUserType(item.id, e.target.value)}
+                      placeholder="Nghe và điền..."
+                      disabled={isCorrect} // Đúng rồi thì khóa lại không cho sửa
+                      style={{
+                        padding: "10px", 
+                        width: "100%", 
+                        boxSizing: "border-box", // Quan trọng: Giúp padding không làm phình to input
+                        border: isCorrect ? "2px solid #2ecc71" : "1px solid #ccc",
+                        color: isCorrect ? "#27ae60" : "#333",
+                        backgroundColor: isCorrect ? "#eaffea" : "white",
+                        borderRadius: "4px",
+                        fontWeight: isCorrect ? "bold" : "normal"
+                      }}
+                    />
+                  </td>
+                  
+                  {/* CỘT NGHĨA (FIX LỖI 2) */}
+                  <td style={{ padding: "10px", color: "#555", textTransform: "capitalize" }}>
+                      {item.meaning || "Wait..."}
+                  </td>
 
-                <td style={{ padding: "10px" }}>
-                  {item.audio ? <audio controls src={item.audio} style={{ height: "30px", width: "80px" }} /> : "-"}
-                </td>
-                <td style={{ padding: "10px" }}>
-                  <button onClick={() => handleListen(item.id)} style={{cursor: "pointer", borderRadius: "50%", width: "30px", height: "30px"}}>🎤</button>
-                  {spoken && <div style={{fontSize: '10px', color: spoken===item.word.toLowerCase()?'green':'red'}}>{spoken}</div>}
-                </td>
-                <td style={{ padding: "10px", fontSize: "12px" }}>
-                  {item.type} <br/> /{item.phonetic}/
-                </td>
-                <td style={{ padding: "10px", textAlign: "center" }}>
-                  <button onClick={() => handleDelete(item.id)} style={{border:'none', background:'transparent', cursor:'pointer'}}>❌</button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  {/* CỘT AUDIO (FIX LỖI 3 - UI) */}
+                  <td style={{ textAlign: "center" }}>
+                    {item.audio ? (
+                        <audio controls src={item.audio} style={{ height: "30px", maxWidth: "120px" }} />
+                    ) : (
+                        <span style={{fontSize: "12px", color: "#999"}}>No Audio</span>
+                    )}
+                  </td>
+
+                  {/* CỘT NÓI (FIX LỖI 4) */}
+                  <td style={{ textAlign: "center" }}>
+                    <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+                        <button 
+                            onClick={() => handleListen(item.id)} 
+                            style={{
+                                cursor: "pointer", borderRadius: "50%", width: "40px", height: "40px", 
+                                border: "1px solid #ddd", background: "white", fontSize: "18px",
+                                marginBottom: "4px", boxShadow: "0 2px 5px rgba(0,0,0,0.1)"
+                            }}
+                            title="Click to speak"
+                        >
+                            🎤
+                        </button>
+                        {/* Kết quả nói hiển thị nhỏ gọn */}
+                        {spoken && (
+                            <span style={{
+                                fontSize: '11px', 
+                                fontWeight: 'bold',
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                color: spoken === item.word.toLowerCase() ? "white" : "white",
+                                background: spoken === item.word.toLowerCase() ? "#2ecc71" : "#e74c3c"
+                            }}>
+                                {spoken}
+                            </span>
+                        )}
+                    </div>
+                  </td>
+
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#666" }}>
+                    <div style={{fontStyle: "italic"}}>{item.type}</div>
+                    <div style={{color: "#888"}}>/{item.phonetic}/</div>
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <button onClick={() => handleDelete(item.id)} style={{border:'none', background:'transparent', cursor:'pointer', color: "#e74c3c", fontSize: "18px"}}>×</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
-}
-
-export default App;

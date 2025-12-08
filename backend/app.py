@@ -1,14 +1,16 @@
+import os
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
-import requests
-import os
-from deep_translator import GoogleTranslator
-app = Flask(__name__)
-CORS(app)
+from deep_translator import GoogleTranslator  # Dùng thư viện này ổn định hơn
 
-# --- CẤU HÌNH DATABASE ---
+app = Flask(__name__)
+CORS(app)  # Cho phép Frontend gọi API thoải mái
+
+# --- 1. CẤU HÌNH DATABASE (Tương thích Render) ---
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///words.db')
+# Fix lỗi đặc thù của Render: 'postgres://' -> 'postgresql://'
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
@@ -17,117 +19,146 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-
-# --- MODEL (Cần cột meaning) ---
+# --- 2. MODEL DATABASE ---
 class WordHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word = db.Column(db.String(100), nullable=False)
-    meaning = db.Column(db.String(200)) # Cột lưu nghĩa tiếng Việt
+    meaning = db.Column(db.String(200))
     type = db.Column(db.String(50))
     phonetic = db.Column(db.String(100))
-    audio_url = db.Column(db.String(200))
-    is_correct = db.Column(db.Boolean, default=False)
+    audio_url = db.Column(db.String(500)) # Tăng độ dài để chứa link dài
+    is_correct = db.Column(db.Boolean, default=True)
 
+# Tạo bảng nếu chưa có
 with app.app_context():
     db.create_all()
 
-# --- LOGIC TỪ ĐIỂN & DỊCH ---
-def get_word_info(word):
-    # 1. Check từ điển tiếng Anh
-    url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
-    
-    # 2. Chuẩn bị biến kết quả
+# --- 3. HÀM XỬ LÝ LOGIC (Trái tim của App) ---
+def get_word_details(word):
+    # Biến lưu kết quả mặc định
     result = {
         "word": word,
         "found": False,
-        "meaning": ""
+        "meaning": "",
+        "type": "",
+        "phonetic": "",
+        "audio": ""
     }
 
+    # BƯỚC 1: Gọi API Từ điển Tiếng Anh
     try:
-        # Gọi API từ điển
-        response = requests.get(url)
+        api_url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
+        response = requests.get(api_url)
+        
         if response.status_code == 200:
-            data = response.json()[0]
+            data = response.json()[0] # Lấy entry đầu tiên
             result['found'] = True
             
-            # Lấy thông tin cơ bản
-            result['phonetic'] = data.get('phonetic', '') or data.get('phonetics', [{}])[0].get('text', 'N/A')
-            result['type'] = data.get('meanings', [{}])[0].get('partOfSpeech', 'N/A')
-            
-            audio_url = ""
-            for item in data.get('phonetics', []):
-                if item.get('audio'):
-                    audio_url = item.get('audio')
-                    break
-            result['audio'] = audio_url
+            # Lấy loại từ (noun, verb...)
+            meanings = data.get('meanings', [])
+            if meanings:
+                result['type'] = meanings[0].get('partOfSpeech', 'unknown')
 
-            # --- PHẦN MỚI: DÙNG DEEP TRANSLATOR ---
-            try:
-                # Dịch từ 'word' sang tiếng Việt (target='vi')
-                # source='auto' để nó tự nhận diện tiếng Anh
-                translation = GoogleTranslator(source='auto', target='vi').translate(word)
-                result['meaning'] = translation
-            except Exception as e:
-                print(f"Lỗi dịch thuật: {e}")
-                result['meaning'] = "Không dịch được"
+            # --- QUAN TRỌNG: FIX LỖI MẤT AUDIO ---
+            # API trả về một danh sách các phonetics. 
+            # Cái đầu tiên thường rỗng audio, nên phải dùng vòng lặp để tìm cái có audio.
+            phonetics = data.get('phonetics', [])
+            
+            audio_src = ""
+            text_phonetic = ""
+
+            for item in phonetics:
+                # Ưu tiên tìm link audio
+                if not audio_src and item.get('audio'):
+                    audio_src = item.get('audio')
+                
+                # Ưu tiên tìm phiên âm text (ví dụ: /həˈləʊ/)
+                if not text_phonetic and item.get('text'):
+                    text_phonetic = item.get('text')
+                
+                # Nếu tìm được cả 2 rồi thì dừng vòng lặp ngay cho nhanh
+                if audio_src and text_phonetic:
+                    break
+            
+            result['audio'] = audio_src
+            result['phonetic'] = text_phonetic if text_phonetic else "N/A"
 
     except Exception as e:
-        print(f"Lỗi API: {e}")
+        print(f"Lỗi khi gọi Dictionary API: {e}")
+
+    # BƯỚC 2: Gọi Google Dịch (Sang Tiếng Việt)
+    try:
+        # source='auto' tự nhận diện, target='vi' là tiếng Việt
+        translated = GoogleTranslator(source='auto', target='vi').translate(word)
+        result['meaning'] = translated
+    except Exception as e:
+        print(f"Lỗi dịch thuật: {e}")
+        result['meaning'] = "Không dịch được"
 
     return result
 
-# --- API ROUTES ---
+# --- 4. CÁC ROUTES API ---
+
+@app.route('/', methods=['GET'])
+def home():
+    return "Backend is running!", 200
+
 @app.route('/check-word', methods=['POST'])
 def check_word():
     data = request.json
     word_input = data.get('word', '').strip()
-    
+
     if not word_input:
-        return jsonify({"error": "No word provided"}), 400
-    
-    # Gọi hàm xử lý (đã bao gồm dịch tự động)
-    result = get_word_info(word_input)
-    
-    if result['found']:
+        return jsonify({"error": "Chưa nhập từ"}), 400
+
+    # Gọi hàm xử lý logic ở trên
+    info = get_word_details(word_input)
+
+    # Lưu vào Database
+    try:
         new_entry = WordHistory(
-            word=word_input,
-            meaning=result['meaning'], # Tự động lấy nghĩa từ Google
-            type=result.get('type', ''),
-            phonetic=result.get('phonetic', ''),
-            audio_url=result.get('audio', ''),
+            word=info['word'],
+            meaning=info['meaning'],
+            type=info.get('type', ''),
+            phonetic=info.get('phonetic', ''),
+            audio_url=info.get('audio', ''),
             is_correct=True
         )
         db.session.add(new_entry)
         db.session.commit()
-        return jsonify(result)
-    else:
-        return jsonify({"error": "Không tìm thấy từ này"}), 404
+    except Exception as e:
+        print(f"Lỗi Database: {e}")
+        return jsonify({"error": "Lỗi lưu dữ liệu"}), 500
+
+    return jsonify(info)
 
 @app.route('/history', methods=['GET'])
 def get_history():
-    history_list = WordHistory.query.order_by(WordHistory.id.desc()).all()
+    # Lấy danh sách từ mới nhất lên đầu
+    items = WordHistory.query.order_by(WordHistory.id.desc()).all()
     results = []
-    for item in history_list:
+    for item in items:
         results.append({
-            "id": item.id, 
-            "word": item.word, 
+            "id": item.id,
+            "word": item.word,
             "meaning": item.meaning,
             "type": item.type,
-            "phonetic": item.phonetic, 
-            "audio": item.audio_url, 
-            "found": item.is_correct
+            "phonetic": item.phonetic,
+            "audio": item.audio_url,
+            "found": True
         })
     return jsonify(results)
 
 @app.route('/delete/<int:id>', methods=['DELETE'])
 def delete_word(id):
-    word_to_delete = WordHistory.query.get_or_404(id)
+    word = WordHistory.query.get_or_404(id)
     try:
-        db.session.delete(word_to_delete)
+        db.session.delete(word)
         db.session.commit()
-        return jsonify({"message": "Deleted successfully"})
+        return jsonify({"message": "Đã xóa thành công"})
     except:
-        return jsonify({"message": "Error deleting"}), 500
+        return jsonify({"error": "Lỗi khi xóa"}), 500
 
 if __name__ == '__main__':
+    # Chạy debug ở localhost
     app.run(debug=True, port=5000)
