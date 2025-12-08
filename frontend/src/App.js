@@ -57,12 +57,13 @@ function App() {
     fetchHistory(); // Load lại danh sách sau khi thêm xong
   };
 
-  // --- HÀM XÓA TỪ ---
+  // --- HÀM XÓA TỪ (Đã bỏ popup xác nhận) ---
   const handleDelete = async (id) => {
-    if (!window.confirm("Bạn chắc chắn muốn xóa từ này?")) return;
+    // Đã xóa dòng: if (!window.confirm(...)) return;
+
     try {
       await axios.delete(`${API_URL}/delete/${id}`);
-      fetchHistory();
+      fetchHistory(); // Load lại danh sách ngay sau khi xóa
     } catch (error) {
       console.error("Lỗi xóa:", error);
     }
@@ -285,7 +286,7 @@ function App() {
                       fontSize: "15px",
                     }}
                   >
-                    {item.meaning || "Wait..."}
+                    {(item.meaning || "").toLowerCase()}
                   </td>
 
                   {/* Ô AUDIO */}
