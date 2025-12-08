@@ -3,74 +3,99 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import requests
 import os
+from googletrans import Translator # <--- MỚI: Import thư viện dịch
 
 app = Flask(__name__)
 CORS(app)
 
-# --- CẤU HÌNH DATABASE (ĐOẠN BẠN VỪA SỬA) ---
+# --- CẤU HÌNH DATABASE ---
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///words.db')
-
-# Fix lỗi 'postgres://' của Render
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Tắt cảnh báo
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+translator = Translator() # <--- MỚI: Khởi tạo máy dịch
 
-# --- MODEL (GIỮ NGUYÊN) ---
+# --- MODEL (Cần cột meaning) ---
 class WordHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word = db.Column(db.String(100), nullable=False)
+    meaning = db.Column(db.String(200)) # Cột lưu nghĩa tiếng Việt
     type = db.Column(db.String(50))
     phonetic = db.Column(db.String(100))
     audio_url = db.Column(db.String(200))
     is_correct = db.Column(db.Boolean, default=False)
 
-# Tạo bảng (Quan trọng: Lệnh này sẽ tạo bảng trên PostgreSQL khi chạy trên Render)
 with app.app_context():
     db.create_all()
 
-# --- LOGIC CŨ (GIỮ NGUYÊN) ---
+# --- LOGIC TỪ ĐIỂN & DỊCH ---
 def get_word_info(word):
+    # 1. Check từ điển tiếng Anh
     url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
+    
+    # 2. Chuẩn bị biến kết quả
+    result = {
+        "word": word,
+        "found": False,
+        "meaning": ""
+    }
+
     try:
+        # Gọi API từ điển
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()[0]
-            phonetic = data.get('phonetic', '') or data.get('phonetics', [{}])[0].get('text', 'N/A')
+            result['found'] = True
+            
+            # Lấy thông tin cơ bản
+            result['phonetic'] = data.get('phonetic', '') or data.get('phonetics', [{}])[0].get('text', 'N/A')
+            result['type'] = data.get('meanings', [{}])[0].get('partOfSpeech', 'N/A')
+            
             audio_url = ""
             for item in data.get('phonetics', []):
                 if item.get('audio'):
                     audio_url = item.get('audio')
                     break
-            part_of_speech = data.get('meanings', [{}])[0].get('partOfSpeech', 'N/A')
-            return {
-                "word": word, "found": True, "phonetic": phonetic,
-                "type": part_of_speech, "audio": audio_url
-            }
-        return {"word": word, "found": False}
-    except:
-        return {"word": word, "found": False}
+            result['audio'] = audio_url
 
-# --- API ROUTES (GIỮ NGUYÊN) ---
+            # --- PHẦN MỚI: GỌI GOOGLE TRANSLATE ---
+            try:
+                # Dịch từ 'word' sang tiếng Việt (dest='vi')
+                translation = translator.translate(word, dest='vi')
+                result['meaning'] = translation.text
+            except Exception as e:
+                print(f"Lỗi dịch thuật: {e}")
+                result['meaning'] = "Không dịch được"
+
+    except Exception as e:
+        print(f"Lỗi API: {e}")
+
+    return result
+
+# --- API ROUTES ---
 @app.route('/check-word', methods=['POST'])
 def check_word():
     data = request.json
     word_input = data.get('word', '').strip()
+    
     if not word_input:
         return jsonify({"error": "No word provided"}), 400
     
+    # Gọi hàm xử lý (đã bao gồm dịch tự động)
     result = get_word_info(word_input)
     
     if result['found']:
         new_entry = WordHistory(
             word=word_input,
+            meaning=result['meaning'], # Tự động lấy nghĩa từ Google
             type=result.get('type', ''),
             phonetic=result.get('phonetic', ''),
             audio_url=result.get('audio', ''),
-            is_correct=result.get('found', False)
+            is_correct=True
         )
         db.session.add(new_entry)
         db.session.commit()
@@ -84,8 +109,13 @@ def get_history():
     results = []
     for item in history_list:
         results.append({
-            "id": item.id, "word": item.word, "type": item.type,
-            "phonetic": item.phonetic, "audio": item.audio_url, "found": item.is_correct
+            "id": item.id, 
+            "word": item.word, 
+            "meaning": item.meaning,
+            "type": item.type,
+            "phonetic": item.phonetic, 
+            "audio": item.audio_url, 
+            "found": item.is_correct
         })
     return jsonify(results)
 
