@@ -12,8 +12,6 @@ function App() {
   const [listeningId, setListeningId] = useState(null); // ID của từ đang được nghe
 
   // --- CẤU HÌNH API ---
-  // Lưu ý: Khi chạy dưới máy thì đổi thành "http://localhost:5000"
-  // Khi deploy thì dùng link Render của bạn:
   const API_URL = "https://dictation-backend-skto.onrender.com";
 
   // --- HÀM LOAD DỮ LIỆU ---
@@ -59,14 +57,26 @@ function App() {
 
   // --- HÀM XÓA TỪ (Đã bỏ popup xác nhận) ---
   const handleDelete = async (id) => {
-    // Đã xóa dòng: if (!window.confirm(...)) return;
-
     try {
       await axios.delete(`${API_URL}/delete/${id}`);
-      fetchHistory(); // Load lại danh sách ngay sau khi xóa
+      // Cập nhật giao diện ngay lập tức
+      setHistory((prev) => prev.filter((item) => item.id !== id));
     } catch (error) {
       console.error("Lỗi xóa:", error);
+      fetchHistory(); // Nếu lỗi thì load lại
     }
+  };
+
+  // --- HÀM ĐẢO TỪ NGẪU NHIÊN (MỚI THÊM VÀO ĐÂY) ---
+  const handleShuffle = () => {
+    // Tạo bản sao của mảng history
+    const shuffled = [...history];
+    // Thuật toán Fisher-Yates Shuffle
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    setHistory(shuffled);
   };
 
   // --- HÀM XỬ LÝ GIỌNG NÓI (Speech Recognition) ---
@@ -105,7 +115,7 @@ function App() {
     };
 
     recognition.onerror = (event) => {
-      console.error("Speech Error:", event.error);
+      // console.error("Speech Error:", event.error); // Tắt log lỗi cho đỡ rác console
       setListeningId(null);
     };
 
@@ -139,7 +149,7 @@ function App() {
       {/* KHU VỰC NHẬP TỪ */}
       <div
         style={{
-          marginBottom: "30px",
+          marginBottom: "20px", // Giảm margin một chút để nhường chỗ cho nút Đảo từ
           padding: "25px",
           background: "white",
           borderRadius: "15px",
@@ -203,6 +213,34 @@ function App() {
         </div>
       </div>
 
+      {/* --- NÚT ĐẢO TỪ (MỚI THÊM VÀO ĐÂY) --- */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginBottom: "10px",
+        }}
+      >
+        <button
+          onClick={handleShuffle}
+          style={{
+            padding: "8px 15px",
+            background: "#9b59b6", // Màu tím
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          }}
+        >
+          🔀 Đảo thứ tự
+        </button>
+      </div>
+
       {/* BẢNG TỪ VỰNG */}
       <div
         style={{
@@ -253,7 +291,7 @@ function App() {
                     {index + 1}
                   </td>
 
-                  {/* Ô ĐIỀN TỪ (Đã sửa lỗi tràn khung) */}
+                  {/* Ô ĐIỀN TỪ */}
                   <td style={{ padding: "10px" }}>
                     <input
                       type="text"
@@ -277,7 +315,7 @@ function App() {
                     />
                   </td>
 
-                  {/* Ô NGHĨA (Đã sửa lỗi màu đỏ viết hoa) */}
+                  {/* Ô NGHĨA */}
                   <td
                     style={{
                       padding: "10px",
@@ -304,7 +342,7 @@ function App() {
                     )}
                   </td>
 
-                  {/* Ô LUYỆN NÓI (Đã sửa lỗi giao diện xấu) */}
+                  {/* Ô LUYỆN NÓI */}
                   <td style={{ textAlign: "center", verticalAlign: "middle" }}>
                     <div
                       style={{
